@@ -1,0 +1,27 @@
+import tensorflow as tf
+from tensorflow.keras.preprocessing import image
+import numpy as np
+
+# Load the saved model
+model = tf.keras.models.load_model("pill_classifier_model.keras")  # ✅ correct
+
+
+# Define class names (adjust if your folder names are different)
+class_names = ['authentic', 'counterfeit']  # or use model.class_names if available
+
+def predict_image(img_path):
+    img = image.load_img(img_path, target_size=(224, 224))
+    img_array = image.img_to_array(img)
+    img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
+    img_array = tf.expand_dims(img_array, 0)  # Add batch dimension
+
+    predictions = model.predict(img_array)
+    class_idx = np.argmin(predictions)
+    confidence = predictions[0][class_idx] * 100
+    return class_names[class_idx], confidence
+
+# === Example usage ===
+if _name_ == "_main_":
+    img_path = "image.png"  # Replace with your image path
+    label, confidence = predict_image(img_path)
+    print(f"🧠 Prediction: {label} ({confidence:.2f}%)")

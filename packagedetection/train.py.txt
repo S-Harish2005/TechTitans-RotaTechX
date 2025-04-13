@@ -1,0 +1,65 @@
+import tensorflow as tf
+from keras import layers, models
+from keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
+from keras.preprocessing import image_dataset_from_directory
+from keras.optimizers import Adam
+import os
+
+# Paths
+data_dir = "train_cls"  # change this to the folder containing 'authentic' and 'counterfeit'
+img_size = (224, 224)
+batch_size = 32
+
+# Load datasets
+full_dataset = image_dataset_from_directory(
+    data_dir,
+    image_size=img_size,
+    batch_size=batch_size,
+    shuffle=True,
+    label_mode='categorical'  # required for softmax output
+)
+
+# Split train/val
+train_size = int(0.8 * len(full_dataset))
+val_size = len(full_dataset) - train_size
+
+train_ds = full_dataset.take(train_size)
+val_ds = full_dataset.skip(train_size)
+
+# Preprocess using MobileNetV2's preprocessing
+train_ds = train_ds.map(lambda x, y: (preprocess_input(x), y))
+val_ds = val_ds.map(lambda x, y: (preprocess_input(x), y))
+
+# Improve performance with caching and prefetching
+train_ds = train_ds.cache().shuffle(1000).prefetch(buffer_size=tf.data.AUTOTUNE)
+val_ds = val_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+
+# Define base model
+base_model = MobileNetV2(input_shape=(224, 224, 3), include_top=False, weights='imagenet')
+base_model.trainable = False  # freeze base model
+
+# Build model
+model = models.Sequential([
+    base_model,
+    layers.GlobalAveragePooling2D(),
+    layers.Dropout(0.2),
+    layers.Dense(2, activation='softmax')  # 2 classes: authentic, counterfeit
+])
+
+# Compile
+model.compile(
+    optimizer=Adam(learning_rate=0.0001),
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+# Train
+history = model.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=10
+)
+
+# Save model
+model.save("pill_classifier_model.keras")
+print("✅ Model saved as pill_classifier_model.keras")
